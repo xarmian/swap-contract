@@ -21,3 +21,5 @@ Views available:
 * getUserBalance(address) - Returns the amount of tokens held by the contract for (address)
 
 The deployer, or any address specified during deployment, may end the contract by calling an endContract API function.
+
+![Screenshot of program terminal output](screenshot.png?raw=true "Screenshot of program terminal output")
