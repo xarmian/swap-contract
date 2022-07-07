@@ -1,8 +1,9 @@
 'reach 0.1';
 'use strict';
 
-const Params = Tuple(Address); // authAddress
+const Params = Tuple(Address, Token); // authAddress, Token for swapping
 const myFromMaybe = (m) => fromMaybe(m, (() => 0), ((x) => x));
+const SWAP_FEE = 10000000; // 10 token swap fee
 
 export const main = Reach.App(() => {
 
@@ -29,9 +30,9 @@ export const main = Reach.App(() => {
   init();
 
   Deployer.only(() => {
-    const [ AuthAccount ] = declassify(interact.setParams());
+    const [ AuthAccount, SwpToken ] = declassify(interact.setParams());
   });
-  Deployer.publish(AuthAccount);
+  Deployer.publish(AuthAccount, SwpToken);
 
   // Map to track balances for users
   const userBalances = new Map(UInt);
@@ -39,16 +40,18 @@ export const main = Reach.App(() => {
   // View to see balances of users in userBalances map
   V.getUserBalance.set((m) => myFromMaybe(userBalances[m]));
 
-  const [ done, totalDeposits ] = parallelReduce([ false, 0 ])
-      .invariant(balance() >= totalDeposits)
+  const [ done, totalTokens, totalFees ] = parallelReduce([ false, 0, 0 ])
+      .invariant(balance() >= totalFees)
+      .invariant(balance(SwpToken) >= totalTokens)
       .while(!done)
+      .paySpec([ SwpToken ])
       .api(
         UserAPI.join,
         () => {},
-        () => 0,
+        () => [ 0, [ 0, SwpToken ] ],
         (returnFunc) => {
           returnFunc(null);
-          return [ done, totalDeposits ];
+          return [ done, totalTokens, totalFees ];
         }
       )
       .api(
@@ -56,7 +59,7 @@ export const main = Reach.App(() => {
         (depositAmt,_) => {
           assume(depositAmt > 0);
         },
-        (depositAmt,_) => depositAmt,
+        (depositAmt,_) => [ 0, [ depositAmt, SwpToken ]],
         (depositAmt,depositAddr,returnFunc) => {
           require(depositAmt > 0);
 
@@ -64,28 +67,28 @@ export const main = Reach.App(() => {
           userBalances[depositAddr] = curBalance + depositAmt;
 
           returnFunc(myFromMaybe(userBalances[depositAddr]));
-          return [ done, totalDeposits + depositAmt ];
+          return [ done, totalTokens + depositAmt, totalFees ];
         }
       )
       .api(
         UserAPI.withdraw,
         (withdrawAmt) => {
           assume(withdrawAmt > 0);
-          assume(withdrawAmt <= balance());
+          assume(withdrawAmt <= balance(SwpToken));
         },
-        (_) => 0,
+        (_) => [ SWAP_FEE, [ 0, SwpToken ] ],
         (withdrawAmt,returnFunc) => {
           require(withdrawAmt > 0);
-          require(withdrawAmt <= balance());
+          require(withdrawAmt <= balance(SwpToken));
 
           const curBalance = myFromMaybe(userBalances[this]);
           const maxWithdrawAmt = array(UInt, [ curBalance , withdrawAmt ]).min();
           userBalances[this] = curBalance - maxWithdrawAmt;
 
           returnFunc(myFromMaybe(userBalances[this]));
-          transfer(maxWithdrawAmt).to(this);
+          transfer([0, [maxWithdrawAmt, SwpToken]]).to(this);
 
-          return [ done, totalDeposits - maxWithdrawAmt ];
+          return [ done, totalTokens - maxWithdrawAmt, totalFees + SWAP_FEE ];
         }
       )
       .api(
@@ -93,17 +96,18 @@ export const main = Reach.App(() => {
         () => {
           assume(this == Deployer);
         },
-        () => 0,
+        () => [ 0, [ 0, SwpToken ] ],
         (returnFunc) => {
           require(this == Deployer);
           returnFunc(true);
 
-          return [ true, totalDeposits ];
+          return [ true, totalTokens, totalFees ];
         }
       );
 
-  transfer(balance()).to(Deployer);
-  commit();
+      transfer(balance()).to(Deployer);
+      transfer([ 0, [ balance(SwpToken), SwpToken ] ]).to(Deployer);
+      commit();
 
   exit();
 });
