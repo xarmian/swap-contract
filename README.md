@@ -3,7 +3,8 @@ Bear Builder - Swap contract example
 
 This contract and the accompanying test suite (index.mjs)
 were written for the Reach Bear Builder Challenge.
-It serves as an example of a contract that can be used to perform 
+It serves as an example of a contract that can be used to transfer network tokens,
+by allowing any user to deposit tokens that can only be withdrawn by the designated addressee.
 
 This contract takes a slightly different approach to a traditional swap.
 It uses an API to allow any user to connect to the contract and deposit tokens.
