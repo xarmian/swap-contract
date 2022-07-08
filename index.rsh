@@ -94,11 +94,11 @@ export const main = Reach.App(() => {
       .api(
         AdminAPI.endContract,
         () => {
-          assume(this == Deployer);
+          assume(this == Deployer || this == AuthAccount);
         },
         () => [ 0, [ 0, SwpToken ] ],
         (returnFunc) => {
-          require(this == Deployer);
+          require(this == Deployer || this == AuthAccount);
           returnFunc(true);
 
           return [ true, totalTokens, totalFees ];
